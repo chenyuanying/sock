@@ -35,9 +35,6 @@ int main(void)
 	int currClientNum = 0;
 
 
-
-
-
 	// Initialize Winsock
 	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != 0) {
@@ -103,9 +100,10 @@ int main(void)
 
 	    // clientAddrList[currClientNum++] = clientAddr;
 	    clientAddrList[0] = clientAddr;
-		currClientNum = 0;
+		currClientNum = 1;
 
 	    memset(recvbuf, 0, recvbuflen);
+
 	    // Receive until the peer shuts down the connection
 	    do {
 
@@ -219,6 +217,7 @@ int main(void)
 	        		}
 	        	}
 
+				// case 5: request for disconnecting
 	    		if (strcmp(recvbuf, "disconnect") == 0){
 	                // shutdown the connection since we're done
 	                iResult = shutdown(ClientSocket, SD_SEND);

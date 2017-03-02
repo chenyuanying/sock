@@ -11,11 +11,31 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
+#include<process.h>
 
 
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Mswsock.lib")
 #pragma comment(lib, "AdvApi32.lib")
+
+char recvbuf[DEFAULT_BUFLEN];
+int recvbuflen = DEFAULT_BUFLEN;
+
+SOCKET ConnectSocket = INVALID_SOCKET;
+
+void receive(void *param){
+	int iResult;
+    do{
+	    iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+		if (iResult > 0){
+			printf("%s\n", recvbuf);
+		}
+	    else if (iResult < 0)
+	        printf("recv failed: %d\n", WSAGetLastError());
+	   } while (ConnectSocket != INVALID_SOCKET);
+	_endthread();
+
+}
 
 int main(void){
 
@@ -74,7 +94,6 @@ int main(void){
             return 1;
         }
 
-        SOCKET ConnectSocket = INVALID_SOCKET;
 
         // Attempt to connect the first address returned by
         // the call to getaddrinfo
@@ -110,7 +129,7 @@ int main(void){
 	    }
 
 	    // Connect successfully
-	    printf("Connect sucessfully\n");
+	    printf("Connect sucessfully!\n\n");
 	    printf("disconn: disconnect with server\n"
 	    	"time: get server time\n"
 	    	"name: get server name\n"
@@ -118,14 +137,15 @@ int main(void){
 	    	"send<id>info: send the information to another client\n"
 	    	"quit: quit the program\n");
 
+		// Create a thread to receive data from server
+
+        _beginthread(receive, 0, NULL);
+
 	    // Read the command and sending&receiving data on the client
 
 	    while (1){
 
-	        int recvbuflen = DEFAULT_BUFLEN;
-	
 	        char sendbuf[100];
-	        char recvbuf[DEFAULT_BUFLEN];
 	    	memset(sendbuf, 0, sizeof(sendbuf));
 			memset(recvbuf, 0, recvbuflen);
 
@@ -142,22 +162,6 @@ int main(void){
 	            	return 1;
 	            }
 
-				// Receive data
-	            do{
-	            	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-					if (iResult > 0){
-						if (strcmp(input, "name") == 0){
-							printf("%s\n", recvbuf);
-						}
-						else{
-							printf("%s", recvbuf);
-						}
-						break;
-					}
-	            	else if (iResult < 0)
-	            		printf("recv failed: %d\n", WSAGetLastError());
-	            } while (iResult > 0);
-
 	    	}
 	    	else if (strcmp(input, "disconnect") == 0){
 	            // Shutdown the connection for sending since no more data will be sent
@@ -165,6 +169,7 @@ int main(void){
 
 				strcpy_s(sendbuf, "disconnect");
 	            iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
+
 	            if (iResult == SOCKET_ERROR){
 	            	printf("send failed: %d\n", WSAGetLastError());
 	            	closesocket(ConnectSocket);
@@ -173,6 +178,7 @@ int main(void){
 	            }
 
 	            iResult = shutdown(ConnectSocket, SD_SEND);
+
 	            if (iResult == SOCKET_ERROR){
 	            	printf("shutdown failed: %d\n", WSAGetLastError());
 	            	closesocket(ConnectSocket);
@@ -180,8 +186,11 @@ int main(void){
 	            	return 1;
 	            }
 
+	           	closesocket(ConnectSocket);
+                ConnectSocket = INVALID_SOCKET;
+
 	            printf("Connection closed...\n");
-	            printf("Enter quit to quit the program or enter connect<ip><port> to connect the server\n");
+	            printf("Enter quit to quit the program or enter connect<ip>port to connect the server\n");
 	    		break;
 	    		
 	    	}
@@ -226,18 +235,8 @@ int main(void){
 	                    	return 1;
 	                    }
 
-				        // Receive data
-	                    do{
-	                    	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-				        	if (iResult > 0){
-				        		printf("%s\n", recvbuf);
-				        		break;
-				        	}
-	                    	else if (iResult < 0)
-	                    		printf("recv failed: %d\n", WSAGetLastError());
-	                    } while (iResult > 0);
-	    		        	}
-	    		        }
+	    		    }
+	    		}
 
 	    	}
 	    	else{
