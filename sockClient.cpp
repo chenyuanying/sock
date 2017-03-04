@@ -143,26 +143,28 @@ int main(void){
 
 	    // Read the command and sending&receiving data on the client
 
+		getchar();// this is because gets funcation
+
 	    while (1){
 
 	        char sendbuf[100];
 	    	memset(sendbuf, 0, sizeof(sendbuf));
 			memset(recvbuf, 0, recvbuflen);
 
-	    	scanf_s("%s", input, 100);
-	    	if (strcmp(input, "time") == 0 || strcmp(input, "name") == 0 || strcmp(input, "list") == 0){
-	    		strcpy_s(sendbuf, input);
+			gets_s(input, 100);
+			if (strcmp(input, "time") == 0 || strcmp(input, "name") == 0 || strcmp(input, "list") == 0){
+				strcpy_s(sendbuf, input);
 
 				// Send data
-	            iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
-	            if (iResult == SOCKET_ERROR){
-	            	printf("send failed: %d\n", WSAGetLastError());
-	            	closesocket(ConnectSocket);
-	            	WSACleanup();
-	            	return 1;
-	            }
+				iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
+				if (iResult == SOCKET_ERROR){
+					printf("send failed: %d\n", WSAGetLastError());
+					closesocket(ConnectSocket);
+					WSACleanup();
+					return 1;
 
-	    	}
+				}
+			}
 	    	else if (strcmp(input, "disconnect") == 0){
 	            // Shutdown the connection for sending since no more data will be sent
 	            // The client can still use the ConnectSocket for receiving data
