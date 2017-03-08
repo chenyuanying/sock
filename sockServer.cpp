@@ -174,7 +174,6 @@ void recvSend(void* param){
 
 				ReleaseMutex(modifyListMutex);
 				_endthread();
-	    		break;
 	    	}
 
 	    }

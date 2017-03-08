@@ -13,15 +13,52 @@
 
 #pragma comment (lib, "Ws2_32.lib")
 
-#define DEFAULT_BUFLEN 512
+#define DEFAULT_BUFLEN 7512
 #define DEFAULT_PORT "21194"
 #define MAX_CLIENT_NUM 1024
+#define MAX_NAME_OR_PASSWORD_LEN 50
 
 
 sockaddr_in clientAddrList[MAX_CLIENT_NUM];
 int currClientNum = 0;
 SOCKET clientSocketList[MAX_CLIENT_NUM];
 HANDLE modifyListMutex;
+
+
+static char* not_found_response_template =
+"HTTP/1.1 404 Not Found\r\n"
+"Content-Length: 116\r\n"
+"Content-Type: text/html\r\n"
+"\r\n"
+"<html>\r\n"
+" <body>\r\n"
+"  <h1>Not Found</h1>\r\n"
+"  <p>The requested URL was not found on this server.</p>\r\n"
+" </body>\r\n"
+"</html>\r\n";
+
+static char* verify_success_template =
+"HTTP/1.1 200 OK\r\n"
+"Content-Length: 58\r\n"
+"Content-Type:text/html\r\n"
+"\r\n"
+"<html>\r\n"
+" <body>\r\n"
+"  Login Successfully\r\n"
+" </body>\r\n"
+"</html>\r\n";
+
+static char* verify_fail_template =
+"HTTP/1.1 200 OK\r\n"
+"Content-Length: 52\r\n"
+"Content-Type:text/html\r\n"
+"\r\n"
+"<html>\r\n"
+" <body>\r\n"
+"  Login failed\r\n"
+" </body>\r\n"
+"</html>\r\n";
+
 
 struct addrAndSocket{
 	sockaddr_in addr;
@@ -46,18 +83,20 @@ void recvSend(void* param){
 				char pathAndFile[100] = { 0 };
 				char host[100] = { 0 };
 				char sendBuf[DEFAULT_BUFLEN] = { 0 };
-				strncpy_s(method, recvbuf, 3);
-				char *space2Loc = strchr(recvbuf + 4, ' ');
-				strncpy_s(pathAndFile, recvbuf + 4, space2Loc - recvbuf - 4);
+				strncpy_s(method, recvbuf, 4);
 
 				// GET method
-				if (strcmp(method, "GET") == 0){
-					if (strcmp(pathAndFile, "/dir/hello.html") == 0){
-						printf("Inside hello.html\n");
+				if (strcmp(method, "GET ") == 0){
+				    char *space2Loc = strchr(recvbuf + 4, ' ');
+				    strncpy_s(pathAndFile, recvbuf + 4, space2Loc - recvbuf - 4);
+
+					// Case1: request for noimg.html
+
+					if (strcmp(pathAndFile, "/dir/noimg.html") == 0){
 						// Read the file
 						FILE *fp;
 						char content[800] = { 0 };
-						if (fopen_s(&fp, "C:\\Users\\yy\\Desktop\\dir\\hello.html", "r") == 0){
+						if (fopen_s(&fp, "C:\\Users\\yy\\Desktop\\dir\\noimg.html", "r") == 0){
 							char tempBuf[100] = { 0 };
 							while (fgets(tempBuf, 100, fp) != NULL){
 								strcat_s(content, tempBuf);
@@ -72,27 +111,171 @@ void recvSend(void* param){
 
 	                        if (iSendResult == SOCKET_ERROR) {
 	                            printf("send failed with error: %d\n", WSAGetLastError());
+	                            memset(recvbuf, 0, recvbuflen);
+								break;
 	    	                }
-	                        memset(recvbuf, 0, recvbuflen);
+						}
+						// Cannot find the file, return http 404
+						else{
+							sprintf_s(sendBuf, "%s", not_found_response_template);
+	                        iSendResult = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
+	                        if (iSendResult == SOCKET_ERROR) {
+	                            printf("send failed with error: %d\n", WSAGetLastError());
+	                            memset(recvbuf, 0, recvbuflen);
+								break;
+	    	                }
+	                        closesocket(ClientSocket);
+				            _endthread();
+						}
+					}
+					
+					// Case 2: request for logo.jpg
+					else if (strcmp(pathAndFile, "/dir/img/logo.jpg") == 0){
+						FILE *fp = NULL;
+						char *content = NULL;
+						if (fopen_s(&fp, "C:\\Users\\yy\\Desktop\\dir\\img\\logo.jpg", "rb") == 0){
+							fseek(fp, 0, SEEK_END);
+							int picSize = ftell(fp);
+							rewind(fp);
+							
+							content = (char *)malloc(sizeof(char)*picSize);
+							if (content == NULL){
+								printf("Memory Error\n");
+								break;
+							}
+
+							if (fread(content, 1, picSize, fp) != picSize){
+								printf("Read Error\n");
+								break;
+							}
+							fclose(fp);
+
+							char header[DEFAULT_BUFLEN];
+							sprintf_s(header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: image/jpeg; charset=UTF-8\r\n\r\n", picSize);
+							int headerSize = strlen(header);
+							memcpy(sendBuf, header, headerSize);
+							memcpy(sendBuf + headerSize, content, picSize);
+
+	                        iSendResult = send(ClientSocket, sendBuf, headerSize + picSize, 0);
+
+							free(content);
+							content = NULL;
+
+	                        if (iSendResult == SOCKET_ERROR) {
+	                            printf("send failed with error: %d\n", WSAGetLastError());
+	                            memset(recvbuf, 0, recvbuflen);
+								break;
+	    	                }
 						}
 						else{
-							// todo: 404
-							printf("Cannot open the file!\n");
+							sprintf_s(sendBuf, "%s", not_found_response_template);
+	                        iSendResult = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
+	                        if (iSendResult == SOCKET_ERROR) {
+	                            printf("send failed with error: %d\n", WSAGetLastError());
+	                            memset(recvbuf, 0, recvbuflen);
+								break;
+	    	                }
+	                        closesocket(ClientSocket);
+				            _endthread();
 						}
-						
-					}
-					else if (1){
-						//todo: request for other files
-					}
 
+					}
+					// Case 3: request for test.html
+					else if (strcmp(pathAndFile, "/dir/test.html") == 0){
+						// Read the file
+						FILE *fp;
+						char content[800] = { 0 };
+						if (fopen_s(&fp, "C:\\Users\\yy\\Desktop\\dir\\test.html", "r") == 0){
+							char tempBuf[100] = { 0 };
+							while (fgets(tempBuf, 100, fp) != NULL){
+								strcat_s(content, tempBuf);
+							}
+							fclose(fp);
+							int contentLength = strlen(content);
+
+							// Assemble the message
+							sprintf_s(sendBuf, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s", contentLength, content);
+							// Send the http reply
+	                        iSendResult = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
+
+	                        if (iSendResult == SOCKET_ERROR) {
+	                            printf("send failed with error: %d\n", WSAGetLastError());
+	                            memset(recvbuf, 0, recvbuflen);
+								break;
+	    	                }
+						}
+						else{
+							sprintf_s(sendBuf, "%s", not_found_response_template);
+	                        iSendResult = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
+	                        if (iSendResult == SOCKET_ERROR) {
+	                            printf("send failed with error: %d\n", WSAGetLastError());
+	                            memset(recvbuf, 0, recvbuflen);
+								break;
+	    	                }
+	                        closesocket(ClientSocket);
+				            _endthread();
+						}
+					}
+					else{
+						sprintf_s(sendBuf, "%s", not_found_response_template);
+						iSendResult = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
+						if (iSendResult == SOCKET_ERROR){
+							printf("send failed with error: %d\n", WSAGetLastError());
+							memset(recvbuf, 0, recvbuflen);
+							break;
+						}
+	                    closesocket(ClientSocket);
+				        _endthread();
+					}
 				}
 				// POST method
 				else if (strcmp(method, "POST") == 0){
-					// todo: Post
+				    char *space2Loc = strchr(recvbuf + 5, ' ');
+				    strncpy_s(pathAndFile, recvbuf + 5, space2Loc - recvbuf - 5);
+					if (strcmp(pathAndFile, "/dir/dopost") == 0){
+						char form[DEFAULT_BUFLEN] = { 0 };
+						strncpy_s(form, doubleReturnLoc + 4, strlen(recvbuf) - (doubleReturnLoc + 4 - recvbuf));
+						char *andSplit = strchr(form, '&');
+						char loginStr[MAX_NAME_OR_PASSWORD_LEN] = { 0 };
+						char passwordStr[MAX_NAME_OR_PASSWORD_LEN] = { 0 };
+						strncpy_s(loginStr, form, andSplit - form);
+						strncpy_s(passwordStr, andSplit + 1, strlen(form) - (andSplit - form) - 1);
+						char username[MAX_NAME_OR_PASSWORD_LEN];
+						char password[MAX_NAME_OR_PASSWORD_LEN];
+						sscanf_s(loginStr, "login=%s", username, MAX_NAME_OR_PASSWORD_LEN);
+						sscanf_s(passwordStr, "pass=%s", password, MAX_NAME_OR_PASSWORD_LEN);
+						if (strcmp(username, "21521194") == 0 && strcmp(password, "1194") == 0){
+							// Verify sucessfully
+							strcpy_s(sendBuf, verify_success_template);
+						}
+						else{
+							// Verify failed
+							strcpy_s(sendBuf, verify_fail_template);
+						}
+						iSendResult = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
+						if (iSendResult == SOCKET_ERROR){
+							printf("send failed with error: %d\n", WSAGetLastError());
+							memset(recvbuf, 0, recvbuflen);
+							break;
+						}
+						// "Post" need to clear the recvBuf
+						memset(recvbuf, 0, recvbuflen);
+					}
+					else {
+						sprintf_s(sendBuf, "%s", not_found_response_template);
+						iSendResult = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
+						if (iSendResult == SOCKET_ERROR){
+							printf("send failed with error: %d\n", WSAGetLastError());
+							memset(recvbuf, 0, recvbuflen);
+							break;
+						}
+	                    closesocket(ClientSocket);
+				        _endthread();
+					}
+
 				}
 
 			}
-
 
 	    }
 	    else if (iResult < 0){
@@ -104,6 +287,7 @@ void recvSend(void* param){
 
 int main(void)
 {
+
 	WSADATA wsaData;
 	int iResult;
 
@@ -190,7 +374,6 @@ int main(void)
 		struct addrAndSocket *ptrCurr = &currAddrAndSocket;
 
 		currClientNum++;
-		
 		_beginthread(recvSend, 0, (void*)ptrCurr);
 
 	}
