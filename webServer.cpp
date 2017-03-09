@@ -19,9 +19,6 @@
 #define MAX_NAME_OR_PASSWORD_LEN 50
 
 
-sockaddr_in clientAddrList[MAX_CLIENT_NUM];
-int currClientNum = 0;
-SOCKET clientSocketList[MAX_CLIENT_NUM];
 HANDLE modifyListMutex;
 
 
@@ -105,7 +102,8 @@ void recvSend(void* param){
 							int contentLength = strlen(content);
 
 							// Assemble the message
-							sprintf_s(sendBuf, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s", contentLength, content);
+							sprintf_s(sendBuf, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
+								"Content-Type: text/html; charset=UTF-8\r\n\r\n%s", contentLength, content);
 							// Send the http reply
 	                        iSendResult = send(ClientSocket, sendBuf, strlen(sendBuf), 0);
 
@@ -151,7 +149,8 @@ void recvSend(void* param){
 							fclose(fp);
 
 							char header[DEFAULT_BUFLEN];
-							sprintf_s(header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: image/jpeg; charset=UTF-8\r\n\r\n", picSize);
+							sprintf_s(header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
+								"Content-Type: image/jpeg; charset=UTF-8\r\n\r\n", picSize);
 							int headerSize = strlen(header);
 							memcpy(sendBuf, header, headerSize);
 							memcpy(sendBuf + headerSize, content, picSize);
@@ -366,14 +365,11 @@ int main(void)
 	    	return 1;
 	    }
 
-		clientAddrList[currClientNum] = clientAddr;
-		clientSocketList[currClientNum] = ClientSocket;
 		struct addrAndSocket currAddrAndSocket;
 		currAddrAndSocket.addr = clientAddr;
 		currAddrAndSocket.sock = ClientSocket;
 		struct addrAndSocket *ptrCurr = &currAddrAndSocket;
 
-		currClientNum++;
 		_beginthread(recvSend, 0, (void*)ptrCurr);
 
 	}
